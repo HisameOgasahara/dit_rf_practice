@@ -19,7 +19,7 @@
 
 `PROFILE_STAGES`에는 `load_text_encoder`, `encode_prompt`, `load_dit`, `adapt_conditioning`, `sample_latents`, `sample_euler`, `load_vae`, `decode_image`, `cache_transfer`를 지정할 수 있습니다. 로딩까지 비교하려면 예를 들어 `load_dit,sample_latents,decode_image`를 입력합니다. 생성은 지정한 스텝 구간을 한 번 기록하며, 그 외 선택한 함수는 호출 전체를 기록합니다. 생성 스텝이 wait + warmup보다 작거나 같으면 프로파일을 생략한 이유를 출력하고 생성은 계속합니다.
 
-프로파일 요약은 CPU/CUDA의 자식 연산을 제외한 시간 순으로 표시되고, 동일한 내용을 TXT로 저장합니다. trace에는 `weights/read_and_copy`, `model/initialize`, `model/lora_fusion`, `text/qwen_forward`, `text/anima_adapter`, `sampling/positive_dit`, `sampling/negative_dit`, `sampling/cfg`, `sampling/euler_update`, `vae/decode` 구간이 표시됩니다. 이를 통해 가중치 복사, positive/negative DiT, CFG 계산, 디코딩 중 어느 부분에 시간이 걸리는지 구분할 수 있습니다. 파일마다 고유 이름을 사용하므로 반복 실행 결과가 함께 남습니다.
+프로파일 요약은 CPU/CUDA의 자식 연산을 제외한 시간 순으로 표시되고, 동일한 내용을 TXT로 저장합니다. trace에는 `weights/read_and_copy`, `model/initialize`, `model/lora_fusion`, `text/qwen_forward`, `text/anima_adapter`, `sampling/cfg_dit`(CFG 사용 시 positive·negative 배치 호출), `sampling/positive_dit`(CFG 1), `sampling/cfg`, `sampling/euler_update`, `vae/decode` 구간이 표시됩니다. 이를 통해 가중치 복사, DiT, CFG 계산, 디코딩 중 어느 부분에 시간이 걸리는지 구분할 수 있습니다. 파일마다 고유 이름을 사용하므로 반복 실행 결과가 함께 남습니다.
 
 trace JSON은 Perfetto 또는 Chrome trace viewer에서 열 수 있습니다. CUDA 커널 타임라인은 실행 환경의 CUPTI 지원에 따라 제공 여부가 달라집니다. profiler를 켜면 기록·동기화·파일 저장 비용이 생기므로, 일반 생성 속도와 profiler 실행 속도는 별도로 비교하세요. shape/memory/stack 옵션은 필요한 경우에만 켜는 편이 좋습니다. prompt encoding과 conditioning을 다시 실행하면 호출별 별도 파일이 만들어집니다.
 

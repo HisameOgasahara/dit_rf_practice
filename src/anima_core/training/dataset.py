@@ -196,3 +196,9 @@ class SampleStream:
 
     def state_dict(self):
         return {"epoch": self.epoch, "cursor": self.cursor}
+
+    def load_state_dict(self, state):
+        if state["epoch"] != self.epoch:
+            self.epoch = state["epoch"]
+            self._set_order()
+        self.cursor = state["cursor"]

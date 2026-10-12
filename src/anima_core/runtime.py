@@ -154,12 +154,16 @@ def encode_prompt(
     return_token_weights=False,
     return_attention_masks=False,
 ):
-    if return_attention_masks and use_token_weights:
-        raise ValueError("학습용 attention mask 반환은 토큰 가중치와 함께 사용할 수 없습니다.")
+    """반환값: (Qwen 출력, T5 ids[, T5 가중치][, Qwen mask, T5 mask]).
+
+    anima-lora처럼 Qwen 패딩 위치의 출력을 0으로 만듭니다. 학습 캐시와 같은
+    adapter 조건을 얻으려면 마스크를 받아 adapt_conditioning에 함께 넘기세요.
+    """
     if use_token_weights:
         qwen_inputs, t5_ids, t5_weights = tokenize_weighted_prompt(
             qwen_tokenizer, t5_tokenizer, prompt, max_sequence_length
         )
+        t5_mask = torch.ones(t5_ids.shape, dtype=torch.bool)
     else:
         qwen_inputs = qwen_tokenizer(
             [prompt],
@@ -173,6 +177,7 @@ def encode_prompt(
             **({"padding": "max_length"} if return_attention_masks else {}),
         )
         t5_ids = t5_inputs.input_ids
+        t5_mask = t5_inputs.attention_mask.bool()
         t5_weights = torch.ones((*t5_ids.shape, 1), dtype=torch.float32)
     input_ids = qwen_inputs.input_ids.to(device)
     attention_mask = qwen_inputs.attention_mask.to(device).bool()
@@ -182,22 +187,28 @@ def encode_prompt(
             attention_mask=attention_mask,
             output_hidden_states=True,
         ).hidden_states[-1].to(dtype)
+    prompt_embeds = prompt_embeds.masked_fill(~attention_mask.unsqueeze(-1), 0)
 
-    t5_ids = t5_ids.to(device)
-    if return_attention_masks:
-        prompt_embeds = prompt_embeds.masked_fill(~attention_mask.unsqueeze(-1), 0)
-        return prompt_embeds, t5_ids, attention_mask, t5_inputs.attention_mask.to(device).bool()
+    result = [prompt_embeds, t5_ids.to(device)]
     if return_token_weights:
-        return prompt_embeds, t5_ids, t5_weights.to(device=device, dtype=dtype)
-    return prompt_embeds, t5_ids
+        result.append(t5_weights.to(device=device, dtype=dtype))
+    if return_attention_masks:
+        result += [attention_mask, t5_mask.to(device)]
+    return tuple(result)
 
 
 @torch.inference_mode()
 @log_stage("Anima text adapter conditioning")
 @profile_stage("adapt_conditioning")
-def adapt_conditioning(dit, prompt_embeds, t5_ids, t5_weights=None):
+def adapt_conditioning(dit, prompt_embeds, t5_ids, t5_weights=None,
+                       qwen_mask=None, t5_mask=None):
+    if qwen_mask is None:
+        logger.warning("Qwen mask 없이 adapter를 실행합니다. 학습 캐시와 조건 계산이 달라집니다.")
     with profile_range("text/anima_adapter"):
-        return dit.preprocess_text_embeds(prompt_embeds, t5_ids, t5xxl_weights=t5_weights)
+        return dit.preprocess_text_embeds(
+            prompt_embeds, t5_ids, t5xxl_weights=t5_weights,
+            target_attention_mask=t5_mask, source_attention_mask=qwen_mask,
+        )
 
 
 @torch.inference_mode()
@@ -221,6 +232,9 @@ def sample_latents(
     s_noise=1.0,
 ):
     validate_sampling_options(sampler, steps, denoise, shift, eta, s_noise)
+    if float(denoise) != 1.0:
+        # 입력 이미지 없이 순수 노이즈에서 시작하므로 sigma=1부터 풀어야 합니다.
+        raise ValueError("T2I 생성은 denoise=1.0만 지원합니다. img2img는 구현되어 있지 않습니다.")
     logger.info("생성 설정: %sx%s, sampler=%s, steps=%s, CFG=%s, seed=%s",
                 width, height, sampler, steps, cfg_scale, seed)
     generator = torch.Generator("cpu").manual_seed(int(seed))

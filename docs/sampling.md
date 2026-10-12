@@ -18,7 +18,7 @@
 | `res_multistep` | 결정적 RES 2차 다단계 갱신 | N |
 | `gradient_estimation` | 이전 속도의 차이로 Euler 보정, 기본 gamma 2 | N |
 
-CFG가 1이면 예측 함수당 DiT를 한 번 호출하고, 그 외에는 positive·negative 조건으로 두 번 호출합니다. 모든 샘플러는 마지막 sigma=0 구간을 처리합니다. Heun은 마지막 구간에서 Euler를 사용합니다.
+CFG가 1이면 예측 함수당 DiT를 한 번 호출하고, 그 외에는 positive·negative 조건을 배치 2로 묶어 한 번 호출합니다. T2I 전용이므로 denoise는 1.0만 받습니다. 모든 샘플러는 마지막 sigma=0 구간을 처리합니다. Heun은 마지막 구간에서 Euler를 사용합니다.
 
 ## 확률적 갱신 설정
 

@@ -1,7 +1,9 @@
 [dataset]
-# 원본 비율을 유지하며 면적 상한으로 축소합니다. 각 변은 16의 배수입니다.
-# 262144 = 512 × 512. 작은 원본은 확대하지 않습니다.
+# 원본 비율을 유지하며 면적이 약 max_pixels가 되도록 맞춥니다(anima-lora free-fit).
+# 각 변은 16의 배수입니다. 262144 = 512 × 512. 작은 원본은 이 면적까지 확대합니다.
 max_pixels = 262144
+# 이미지는 한 장씩 계산합니다. batch_size × gradient_accumulation_steps장을 누적해
+# optimizer를 한 번 업데이트합니다(유효 batch).
 batch_size = 4
 repeat = 6
 caption_dropout_rate = 0.1

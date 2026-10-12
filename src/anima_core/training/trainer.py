@@ -17,6 +17,11 @@ from .loss_recorder import LossRecorder
 from .optimizers import create_optimizer
 
 
+# FP16 GradScaler는 overflow마다 scale을 절반으로 줄입니다. 기본 65536에서 1까지 16번이면
+# 충분하므로, 연속으로 이보다 많이 건너뛰면 gradient 자체가 발산한 것으로 봅니다.
+MAX_CONSECUTIVE_OVERFLOW_SKIPS = 32
+
+
 def create_scheduler(optimizer, training):
     total = training["max_steps"]
     warmup = int(total * training["warmup_ratio"])
@@ -76,6 +81,7 @@ def train_model(model, config, dataset, output_dir, resume_from=None, device="cu
     samples_per_update = batch_size * accumulation
     print(f"이미지 1장씩 계산, 업데이트당 {samples_per_update}장 누적 (batch={batch_size}, accumulation={accumulation})")
     progress = tqdm(total=training["max_steps"], initial=step, desc="LoRA optimizer 업데이트")
+    overflow_skips = 0
     try:
         while step < training["max_steps"]:
             started = time.monotonic()
@@ -84,6 +90,7 @@ def train_model(model, config, dataset, output_dir, resume_from=None, device="cu
             if stream.cursor == len(stream.order):
                 loss_epoch += 1
                 loss_step = 0
+            stream_before_update = stream.state_dict()
             optimizer.zero_grad(set_to_none=True)
             total_loss = 0.0
             lr = optimizer.param_groups[0]["lr"]
@@ -108,8 +115,14 @@ def train_model(model, config, dataset, output_dir, resume_from=None, device="cu
             scaler.step(optimizer)
             scaler.update()
             if scaler.is_enabled() and scaler.get_scale() < old_scale:
-                print("FP16 gradient overflow: optimizer 업데이트를 건너뛰고 scale을 줄였습니다.")
+                overflow_skips += 1
+                if overflow_skips > MAX_CONSECUTIVE_OVERFLOW_SKIPS:
+                    raise RuntimeError("FP16 gradient overflow가 계속됩니다. 학습률을 낮추거나 bf16을 사용하세요.")
+                # 건너뛴 업데이트의 샘플을 버리지 않고 같은 샘플로 다시 계산합니다.
+                stream.load_state_dict(stream_before_update)
+                print("FP16 gradient overflow: scale을 줄이고 같은 샘플로 업데이트를 다시 계산합니다.")
                 continue
+            overflow_skips = 0
             scheduler.step()
             step += 1
             loss_recorder.add(epoch=loss_epoch, step=loss_step, loss=total_loss)

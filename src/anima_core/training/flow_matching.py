@@ -23,7 +23,8 @@ class FlowMatchingLoss:
         if source_attention_mask is not None:
             masks["source_attention_mask"] = source_attention_mask
         prediction = model(
-            x=noisy, timesteps=sigma.to(latent.dtype), context=prompt_embeds,
+            # 노이즈를 섞은 FP32 sigma를 그대로 넘깁니다. DiT의 시간 임베딩은 FP32로 계산합니다.
+            x=noisy, timesteps=sigma, context=prompt_embeds,
             t5xxl_ids=t5_ids, use_gradient_checkpointing=use_gradient_checkpointing,
             **masks,
         )

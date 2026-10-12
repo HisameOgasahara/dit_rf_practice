@@ -97,3 +97,38 @@ def restore_lora_weights(model, weights):
                 if source.shape != target.shape:
                     raise ValueError(f"LoRA rank/크기 불일치: {name}")
                 target.copy_(source)
+
+
+_COMFYUI_SIDES = {"lora_A.weight": "lora_down.weight", "lora_B.weight": "lora_up.weight", "alpha": "alpha"}
+
+
+def convert_to_comfyui(source, destination=None):
+    """학습 LoRA를 ComfyUI가 읽는 kohya 키(lora_unet_*, lora_down/up, alpha)로 저장합니다.
+
+    ComfyUI는 접두어 없는 `blocks.N...` 키를 인식하지 않습니다. 모듈 경로는 ComfyUI
+    Anima와 같으므로 이름만 바꾸고 값과 dtype은 원본 그대로 둡니다.
+    """
+    from pathlib import Path
+    from safetensors import safe_open
+    from safetensors.torch import save_file
+
+    source = Path(source).expanduser().resolve()
+    destination = (Path(destination).expanduser().resolve() if destination
+                   else source.with_name(source.stem + "_comfyui.safetensors"))
+    if destination == source:
+        raise ValueError("변환 결과는 원본과 다른 경로에 저장하세요.")
+    with safe_open(str(source), framework="pt", device="cpu") as handle:
+        metadata = handle.metadata() or {}
+        weights = {key: handle.get_tensor(key) for key in handle.keys()}
+    if metadata.get("format") != "anima_lora":
+        raise ValueError("이 리포에서 학습한 lora.safetensors를 지정하세요.")
+    converted = {}
+    for key, tensor in weights.items():
+        side = next((s for s in _COMFYUI_SIDES if key.endswith("." + s)), None)
+        if side is None:
+            raise ValueError(f"지원하지 않는 LoRA 키입니다: {key}")
+        module = key.removesuffix("." + side).replace(".", "_")
+        converted[f"lora_unet_{module}.{_COMFYUI_SIDES[side]}"] = tensor.contiguous()
+    save_file(converted, str(destination),
+              metadata={"format": "comfyui_lora", "source_step": metadata.get("step", "")})
+    return destination

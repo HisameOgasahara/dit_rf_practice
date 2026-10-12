@@ -18,7 +18,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from anima_core.runtime import sample_euler, sample_latents
 from anima_core.logging_utils import configure_logging
 from anima_core.sampling import SAMPLERS as SAMPLER_FUNCTIONS
-from anima_core.sampling.runner import expected_evaluations, steps_for_evaluations
+from anima_core.sampling.runner import expected_evaluations, run_sampler, steps_for_evaluations
 from anima_core.sampling.model_prediction import ModelPrediction
 from anima_core.sampling.schedules import create_sigmas, offset_first_sigma
 from anima_core.sampling.noise import create_brownian_noise_sampler, create_noise_sampler
@@ -33,16 +33,19 @@ class AnalyticDiT(nn.Module):
         self.mode = mode
         self.contexts = []
         self.timesteps = []
+        self.calls = 0
 
     def forward(self, x, timesteps, context, t5xxl_ids=None):
-        self.contexts.append(float(context.mean()))
+        self.calls += 1
+        self.contexts.extend(context.mean(dim=(1, 2)).tolist())
         self.timesteps.append(timesteps.detach().clone())
         if self.mode == "constant":
             return torch.full_like(x, 0.25)
         if self.mode == "linear":
             return x
         t = timesteps.reshape(-1, 1, 1, 1, 1)
-        return torch.tanh(x * 0.17 + context.mean() * 0.11 + t * 0.23)
+        c = context.mean(dim=(1, 2)).reshape(-1, 1, 1, 1, 1).to(x.dtype)
+        return torch.tanh(x * 0.17 + c * 0.11 + t * 0.23)
 
 
 def old_euler(dit, positive, negative, height, width, seed, steps, cfg_scale,
@@ -78,7 +81,7 @@ class SamplingTests(unittest.TestCase):
         self.options = dict(positive=torch.full((1, 2, 3), 1.25),
                             negative=torch.full((1, 2, 3), -0.75),
                             height=16, width=24, seed=153, steps=7,
-                            cfg_scale=4.0, denoise=0.73, shift=2.4,
+                            cfg_scale=4.0, denoise=1.0, shift=2.4,
                             device="cpu", dtype=torch.float32)
 
     def test_euler_preserves_previous_results_bitwise(self):
@@ -110,7 +113,7 @@ class SamplingTests(unittest.TestCase):
         torch.testing.assert_close(actual, expected, rtol=1e-6, atol=3e-7)
 
     def test_heun_reduces_error_for_linear_velocity(self):
-        options = dict(self.options, cfg_scale=1.0, steps=24, denoise=0.8, shift=1.0)
+        options = dict(self.options, cfg_scale=1.0, steps=24, shift=1.0)
         generator = torch.Generator("cpu").manual_seed(options["seed"])
         initial = torch.randn((1, 16, 2, 3), generator=generator)
         expected = initial * torch.exp(torch.tensor(-options["denoise"]))
@@ -134,8 +137,15 @@ class SamplingTests(unittest.TestCase):
     def test_stochastic_samplers_reproduce_with_partial_denoise(self):
         for sampler in ("euler_ancestral", "dpmpp_2m_sde", "er_sde", "exp_heun_2_x0_sde", "sa_solver"):
             with self.subTest(sampler=sampler):
-                actual = sample_latents(AnalyticDiT(), sampler=sampler, **self.options)
-                repeated = sample_latents(AnalyticDiT(), sampler=sampler, **self.options)
+                # 부분 denoise schedule은 sampler 단위로 확인합니다(T2I 진입점은 1.0만 허용).
+                initial = torch.randn((1, 16, 2, 3), generator=torch.Generator().manual_seed(153))
+
+                def run():
+                    prediction = ModelPrediction(AnalyticDiT(), self.options["positive"],
+                                                 self.options["negative"], self.options["cfg_scale"])
+                    return run_sampler(prediction, initial, sampler, 7, 153, denoise=0.73, shift=2.4)
+
+                actual, repeated = run(), run()
                 self.assertTrue(torch.isfinite(actual).all())
                 self.assertTrue(torch.equal(actual, repeated))
 
@@ -211,6 +221,27 @@ class SamplingTests(unittest.TestCase):
                     model = AnalyticDiT()
                     sample_latents(model, sampler=sampler, **dict(self.options, steps=steps))
                     self.assertEqual(len(model.contexts), planned * 2)
+                    self.assertEqual(model.calls, planned)
+
+    def test_text_to_image_rejects_partial_denoise(self):
+        model = AnalyticDiT()
+        with self.assertRaises(ValueError):
+            sample_latents(model, **dict(self.options, denoise=0.73))
+        self.assertEqual(model.calls, 0)
+
+    def test_cfg_batches_positive_and_negative_in_one_call(self):
+        x = torch.randn(1, 16, 2, 3)
+        sigma = torch.tensor(0.6)
+        batched_model = AnalyticDiT()
+        batched = ModelPrediction(batched_model, self.options["positive"], self.options["negative"], 4.0)
+        actual = batched.velocity(x, sigma)
+        self.assertEqual(batched_model.calls, 1)
+        self.assertEqual(batched_model.contexts, [1.25, -0.75])
+        separate = ModelPrediction(AnalyticDiT(), self.options["positive"],
+                                   torch.full((1, 3, 3), -0.75), 4.0)
+        expected = separate.velocity(x, sigma)
+        self.assertEqual(separate.dit.calls, 2)
+        self.assertTrue(torch.equal(actual, expected))
 
     def test_reject_invalid_sampling_options_before_model_call(self):
         invalid = {"sampler": ["unknown"], "steps": [0, -1, 1.5, True],

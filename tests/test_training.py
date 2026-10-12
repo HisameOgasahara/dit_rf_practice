@@ -376,8 +376,62 @@ class TrainingTests(unittest.TestCase):
         self.assertEqual(len(inference), 2)
         self.assertEqual(inference[0].shape, (1, 512, 4))
         self.assertEqual(inference[1].shape, (1, 2))
-        self.assertTrue(torch.all(inference[0] == 1))
+        self.assertTrue(torch.all(inference[0][:, :3] == 1))
+        self.assertTrue(torch.all(inference[0][:, 3:] == 0))
         self.assertNotIn("padding", t5.calls[1][1])
+        weighted = encode_prompt(encoder, qwen, t5, "caption", device="cpu", dtype=torch.float32,
+                                 return_token_weights=True, return_attention_masks=True)
+        self.assertEqual(len(weighted), 5)
+        self.assertEqual(weighted[3].sum(), 3)
+        self.assertEqual(weighted[2].shape, (1, 512, 1))
+
+    def test_generation_conditioning_matches_training_cache(self):
+        from anima_core.anima_dit import AnimaDiT, LLMAdapter
+        from anima_core.runtime import adapt_conditioning
+
+        model = AnimaDiT.__new__(AnimaDiT)
+        nn.Module.__init__(model)
+        model.llm_adapter = LLMAdapter(source_dim=16, target_dim=16, model_dim=16,
+                                       num_layers=1, num_heads=2, operations=nn, dtype=torch.float32)
+        qwen_mask = torch.arange(8).unsqueeze(0) < 3
+        context = torch.randn(1, 8, 16).masked_fill(~qwen_mask.unsqueeze(-1), 0)
+        t5_ids = torch.tensor([[4, 7, 1, 0, 0, 0, 0, 0]])
+        t5_mask = torch.arange(8).unsqueeze(0) < 3
+        with torch.no_grad():
+            # 학습 캐시: T5를 최대 길이로 패딩하고 두 마스크를 모두 사용합니다.
+            cached = model.preprocess_text_embeds(context, t5_ids, target_attention_mask=t5_mask,
+                                                  source_attention_mask=qwen_mask)
+        # 생성: T5는 실제 길이만 쓰고 Qwen 마스크를 넘깁니다.
+        generated = adapt_conditioning(model, context, t5_ids[:, :3], qwen_mask=qwen_mask,
+                                       t5_mask=torch.ones(1, 3, dtype=torch.bool))
+        unmasked = adapt_conditioning(model, context, t5_ids[:, :3])
+        torch.testing.assert_close(generated, cached)
+        self.assertFalse(torch.allclose(unmasked, cached))
+
+    def test_comfyui_conversion_keys_and_fusion(self):
+        from anima_core.training.lora import convert_to_comfyui
+
+        model = TinyDiT()
+        frozen = deepcopy(model)
+        inject_lora(model, make_config()["lora"])
+        with torch.no_grad():
+            for name, parameter in model.named_parameters():
+                if "lora_B" in name:
+                    parameter.normal_()
+        latent, prompt = torch.randn(1, 4, 1, 2, 2), torch.randn(1, 5, 4)
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "lora.safetensors"
+            save_file(collect_lora_weights(model), str(source), metadata={"format": "anima_lora", "step": "2"})
+            converted = convert_to_comfyui(source)
+            self.assertEqual(converted.name, "lora_comfyui.safetensors")
+            self.assertEqual(sorted(load_file(str(converted))), [
+                f"lora_unet_blocks_{i}_proj.{side}" for i in (0, 1)
+                for side in ("alpha", "lora_down.weight", "lora_up.weight")])
+            self.assertEqual(fuse_lora(frozen, converted), 2)
+            with self.assertRaises(ValueError):
+                convert_to_comfyui(converted)
+        with torch.no_grad():
+            torch.testing.assert_close(model(latent, torch.ones(1), prompt), frozen(latent, torch.ones(1), prompt))
 
     def test_trainer_accumulates_one_image_at_a_time(self):
         config = make_config()
@@ -400,6 +454,82 @@ class TrainingTests(unittest.TestCase):
                         device="cpu", tensorboard=False)
         hook.remove()
         self.assertEqual(batch_shapes, [(1, torch.Size([1, 512, 4]))] * 8)
+
+    def test_fp16_overflow_retries_the_same_samples(self):
+        class OverflowOnceScaler:
+            def __init__(self, *args, **kwargs):
+                self.value, self.updates = 4.0, 0
+
+            def is_enabled(self):
+                return True
+
+            def get_scale(self):
+                return self.value
+
+            def scale(self, loss):
+                return loss
+
+            def unscale_(self, optimizer):
+                pass
+
+            def step(self, optimizer):
+                if self.updates:
+                    optimizer.step()
+
+            def update(self):
+                if not self.updates:
+                    self.value /= 2
+                self.updates += 1
+
+            def state_dict(self):
+                return {"value": self.value}
+
+        def run(scaler_class=None):
+            config = make_config()
+            config["training"]["max_steps"] = 2
+            model = TinyDiT()
+            inject_lora(model, config["lora"])
+            seen = []
+            original = CachedDataset.__getitem__
+
+            def record(dataset, index):
+                seen.append(index)
+                return original(dataset, index)
+
+            with tempfile.TemporaryDirectory() as temporary, \
+                 patch.object(CachedDataset, "__getitem__", record), \
+                 patch("torch.amp.GradScaler", scaler_class or torch.amp.GradScaler):
+                root = Path(temporary)
+                result = train_model(model, config, make_dataset(root / "cache"), root / "output",
+                                     device="cpu", tensorboard=False)
+            return seen, result["step"]
+
+        baseline, _ = run()
+        retried, steps = run(OverflowOnceScaler)
+        self.assertEqual(steps, 2)
+        # 건너뛴 업데이트의 4장을 같은 순서로 다시 계산한 뒤 정상 흐름을 이어갑니다.
+        self.assertEqual(retried, baseline[:4] + baseline)
+
+    def test_sample_stream_rewinds_across_epoch_boundary(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            dataset = make_dataset(Path(temporary) / "cache")
+            stream = SampleStream(dataset, repeat=1, seed=5, batch_size=2)
+            stream.take(2)
+            saved = stream.state_dict()
+            first = [float(sample["latent"].sum()) for sample in stream.take(2)]
+            self.assertEqual(stream.epoch, 1)
+            stream.load_state_dict(saved)
+            self.assertEqual(stream.state_dict(), saved)
+            self.assertEqual([float(sample["latent"].sum()) for sample in stream.take(2)], first)
+
+    def test_flow_matching_passes_fp32_timesteps(self):
+        model = TinyDiT()
+        latent = torch.randn(1, 4, 1, 2, 2, dtype=torch.bfloat16)
+        with patch.object(model, "forward", wraps=model.forward) as forward:
+            FlowMatchingLoss()(model, latent, torch.randn(1, 5, 4, dtype=torch.bfloat16), None)
+        timesteps = forward.call_args.kwargs["timesteps"]
+        self.assertEqual(timesteps.dtype, torch.float32)
+        self.assertEqual(forward.call_args.kwargs["x"].dtype, torch.bfloat16)
 
     def test_trainer_clips_once_after_accumulation_before_optimizer_step(self):
         config = make_config()

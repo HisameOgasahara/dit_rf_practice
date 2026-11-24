@@ -79,4 +79,4 @@ LoRA 가중치는 생성 전에 기존 방식으로 적용합니다. 학습 경�
 
 ## 구현 출처
 
-갱신식과 Brownian noise 처리는 [ComfyUI](https://github.com/Comfy-Org/ComfyUI/blob/1b883beab11c04a2eb82cf6a3ee64294f3303897/comfy/k_diffusion/sampling.py)를 Anima 전용 함수에 맞춰 옮겼습니다. ComfyUI에서 가져와 수정한 샘플러 코드는 GPL-3.0 조건을 따르며, 원문은 저장소 루트의 [LICENSE](../LICENSE)(GPL-3.0)에 포함합니다. DiffSynth에서 가져온 모델 코드의 출처와 [Apache-2.0 고지](../licenses/DiffSynth-Studio-LICENSE)는 유지합니다.
+갱신식과 Brownian noise 처리는 [ComfyUI](https://github.com/Comfy-Org/ComfyUI/blob/1b883beab11c04a2eb82cf6a3ee64294f3303897/comfy/k_diffusion/sampling.py)를 Anima 전용 함수에 맞춰 옮겼습니다. ComfyUI에서 가져와 수정한 샘플러 코드는 GPL-3.0 조건을 따르며, 원문은 [LICENSE](../LICENSE)에 포함합니다. DiffSynth에서 가져온 모델 코드의 출처와 [Apache-2.0 고지](../licenses/DiffSynth-Studio-LICENSE)는 유지합니다.

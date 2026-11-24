@@ -97,5 +97,3 @@ Anima를 대상으로 DiT(Diffusion Transformer)·플로우 매칭(FM)을 학습
 | [anima-lora](https://github.com/sorryhyun/anima_lora) | LoRA 학습 구현 참고 |
 | [anime_tools](https://github.com/sorryhyun/anime_tools) | 이미지 크기 선택 코드 출처 · [MIT](licenses/anime-tools-LICENSE) |
 | [ComfyUI](https://github.com/comfyanonymous/ComfyUI) | Anima 이미지 생성 참고, 샘플러 갱신식·Brownian noise 구현 출처 · [GPL-3.0](LICENSE) |
-
-이 저장소는 GPL-3.0 코드를 함께 포함하므로 전체를 [GPL-3.0](LICENSE)으로 배포합니다. 옮겨 온 파일의 출처는 각 파일 상단에, Apache-2.0·MIT 고지는 [licenses/](licenses)에 있습니다.

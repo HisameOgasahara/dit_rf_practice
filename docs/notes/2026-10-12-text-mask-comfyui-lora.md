@@ -26,7 +26,7 @@ anima-lora 방식으로 통일했다.
 - `encode_prompt`: Qwen 패딩 출력을 항상 0으로 만든다. `return_attention_masks=True`면 Qwen·T5 마스크를 함께 반환한다. 이제 토큰 가중치와도 함께 쓸 수 있다.
   - 반환 순서: `(Qwen 출력, T5 ids[, T5 가중치][, Qwen mask, T5 mask])`
 - `adapt_conditioning`: `qwen_mask`, `t5_mask`를 받아 adapter에 전달한다. 마스크 없이 호출하면 경고를 남긴다.
-- 생성 노트북 3개(`anima_minimal_colab`, sampler 비교 노트북 2개): 마스크를 저장하고 전달하도록 수정했다. 마스크가 없는 기존 `anima_minimal_colab` conditioning 파일은 이전 방식으로 동작한다.
+- 생성 노트북 3개(`anima_minimal_colab`, sampler 비교 노트북 2개): 마스크를 저장하고 전달하도록 수정했다. (sampler 비교 노트북은 루트와 `anima-samplers/`의 사본이었다. 사본은 2026-11-24에 삭제했고 루트의 `tmp_anima_sampler_compare_colab.ipynb`만 남았다.) 마스크가 없는 기존 `anima_minimal_colab` conditioning 파일은 이전 방식으로 동작한다.
 - 테스트: 생성 경로의 adapter 출력이 학습 캐시 경로와 같은지 확인하는 테스트를 추가했다.
 
 ### 왜 anima-lora 쪽인가

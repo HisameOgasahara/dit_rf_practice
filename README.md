@@ -1,10 +1,10 @@
 # DiT · Flow Matching 학습 실습
 
 **T2I 생성**  
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/HisameOgasahara/tmp_diffsynth_practice/blob/main/anima_minimal_colab.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/HisameOgasahara/dit_rf_practice/blob/main/anima_minimal_colab.ipynb)
 
 **LoRA 훈련**  
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/HisameOgasahara/tmp_diffsynth_practice/blob/main/anima_lora_train_colab.ipynb?forceEdit=true&sandboxMode=true)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/HisameOgasahara/dit_rf_practice/blob/main/anima_lora_train_colab.ipynb?forceEdit=true&sandboxMode=true)
 
 Anima를 대상으로 DiT(Diffusion Transformer)·플로우 매칭(FM)을 학습하고, 생성·학습 코드를 이 저장소 안에서 완결하는 프로젝트입니다.
 

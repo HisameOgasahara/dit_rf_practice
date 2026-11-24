@@ -91,13 +91,11 @@ Anima를 대상으로 DiT(Diffusion Transformer)·플로우 매칭(FM)을 학습
 
 ## 크레딧
 
-| 프로젝트 | 활용 | 해당 파일 |
-|---|---|---|
-| [DiffSynth-Studio](https://github.com/modelscope/DiffSynth-Studio) | 교재 및 Anima 모델 구현 출처 · [Apache-2.0](licenses/DiffSynth-Studio-LICENSE) | 옮긴 코드: `src/anima_core/anima_dit.py`¹, `vae.py`, `text_encoder.py` · 구현 참고: `ops.py`, `lora.py`, `training/lora.py` |
-| [anima-lora](https://github.com/sorryhyun/anima_lora) | LoRA 학습 구현 참고 · 옮긴 코드 없음 | — |
-| [anime_tools](https://github.com/sorryhyun/anime_tools) | 이미지 크기 선택 코드 출처(v0.7.5, `74aa014`) · [MIT](licenses/anime-tools-LICENSE) | `src/anima_core/training/anima_image.py` |
-| [ComfyUI](https://github.com/comfyanonymous/ComfyUI) | Anima 이미지 생성 참고, 샘플러 갱신식·Brownian noise 구현 출처 · [GPL-3.0](LICENSE) | `src/anima_core/sampling/`의 `dpmpp.py`, `er_sde.py`, `euler.py`, `exp_heun.py`, `gradient_estimation.py`, `heun.py`, `noise.py`, `res_multistep.py`, `sa_solver.py` |
+| 프로젝트 | 활용 |
+|---|---|
+| [DiffSynth-Studio](https://github.com/modelscope/DiffSynth-Studio) | 교재 및 Anima 모델 구현 출처 · [Apache-2.0](licenses/DiffSynth-Studio-LICENSE) |
+| [anima-lora](https://github.com/sorryhyun/anima_lora) | LoRA 학습 구현 참고 |
+| [anime_tools](https://github.com/sorryhyun/anime_tools) | 이미지 크기 선택 코드 출처 · [MIT](licenses/anime-tools-LICENSE) |
+| [ComfyUI](https://github.com/comfyanonymous/ComfyUI) | Anima 이미지 생성 참고, 샘플러 갱신식·Brownian noise 구현 출처 · [GPL-3.0](LICENSE) |
 
-¹ DiffSynth-Studio의 `diffsynth/models/anima_dit.py`는 ComfyUI의 `comfy/ldm/cosmos/predict2.py`(원 출처 [NVIDIA cosmos-predict2](https://github.com/nvidia-cosmos/cosmos-predict2), Apache-2.0)와 `comfy/ldm/anima/model.py`의 LLMAdapter를 옮긴 코드입니다.
-
-이 저장소는 GPL-3.0 코드를 함께 포함하므로 전체를 [GPL-3.0](LICENSE)으로 배포하며, 위 Apache-2.0·MIT 출처 부분의 고지는 [licenses/](licenses)에 유지합니다.
+이 저장소는 GPL-3.0 코드를 함께 포함하므로 전체를 [GPL-3.0](LICENSE)으로 배포합니다. 옮겨 온 파일의 출처는 각 파일 상단에, Apache-2.0·MIT 고지는 [licenses/](licenses)에 있습니다.

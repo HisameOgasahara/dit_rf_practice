@@ -1,3 +1,5 @@
+# Source: modelscope/DiffSynth-Studio, diffsynth/models/wan_video_vae.py, commit 259d1864903a7d469975584294d233bdb4aba6ae.
+# License: licenses/DiffSynth-Studio-LICENSE (Apache-2.0).
 from einops import rearrange, repeat
 
 import torch

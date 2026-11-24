@@ -1,3 +1,5 @@
+# Source: modelscope/DiffSynth-Studio, diffsynth/models/z_image_text_encoder.py, commit 259d1864903a7d469975584294d233bdb4aba6ae.
+# License: licenses/DiffSynth-Studio-LICENSE (Apache-2.0).
 from transformers import Qwen3Model, Qwen3Config
 import torch
 

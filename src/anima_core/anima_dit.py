@@ -1,3 +1,8 @@
+# Source: modelscope/DiffSynth-Studio, diffsynth/models/anima_dit.py, commit 259d1864903a7d469975584294d233bdb4aba6ae.
+# License: licenses/DiffSynth-Studio-LICENSE (Apache-2.0).
+# Modified for this repository.
+# Upstream lineage: nvidia-cosmos/cosmos-predict2 (Apache-2.0) -> ComfyUI comfy/ldm/cosmos/predict2.py
+# and comfy/ldm/anima/model.py (LLMAdapter) -> DiffSynth-Studio.
 # original code from: comfy/ldm/cosmos/predict2.py
 
 import torch
